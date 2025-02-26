@@ -20,7 +20,10 @@ bot_token = os.getenv("BOT_TOKEN")
 backup_channel = os.getenv("BACKUP_CHANNEL")
 origin_channel = os.getenv("ORIGIN_CHANNEL")
 
-app = Client(name="zone_file_remover", api_id=api_id, api_hash=api_hash)
+if not backup_channel or not origin_channel:
+    raise ValueError("BACKUP_CHANNEL and ORIGIN_CHANNEL must be set in environment variables")
+
+app = Client(name="backupbot", api_id=api_id, api_hash=api_hash)
 
 
 @app.on_message(filters.channel & filters.command("backup"))
@@ -44,5 +47,6 @@ async def backup(client: Client, message: Message):
     print(f"Total messages backup : {total}")
 
 
-print("[Started] Zone file remover bot - waiting for tasks :)")
+print("[Started] Backup bot - waiting for tasks :)")
 app.run()
+print()
