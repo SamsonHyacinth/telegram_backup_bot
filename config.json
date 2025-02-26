@@ -1,0 +1,5 @@
+{
+	"API_HASH": "your api hash here : string",
+	"API_ID": "your api id here withou quote : int",
+	"BOT_TOKEN": "your bot token here : string"
+}
