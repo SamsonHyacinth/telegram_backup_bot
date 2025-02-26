@@ -169,3 +169,10 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+# Session file
+*.session
+*.session*
+
+# python-dotenv
+.token/
+main_0.py
