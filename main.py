@@ -1,18 +1,20 @@
 import asyncio
 import logging
 import os
+from datetime import datetime
 
 from dotenv import load_dotenv
-from pyrogram.client import Client
 from pyrogram import filters
+from pyrogram.client import Client
 from pyrogram.types import Message, Chat
+from pyrogram.errors import FloodWait
 
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.ERROR)
 
-load_dotenv(dotenv_path = ".token/token.txt")
+load_dotenv(dotenv_path = ".token/token.env")
 
 api_hash = os.getenv("API_HASH")
 api_id = os.getenv("API_ID")
@@ -34,19 +36,32 @@ async def backup(client: Client, message: Message):
     async for m in msg:
         messages.append(m)
 
-    total = 0
+    await client.send_message(chat_id=message.chat.id, text=f"Starting backup... {len(messages)} messages to backup")
 
     messages = reversed(messages)
 
+    total = 0 # Counter to reset the limit of 1500 messages
     for message in messages:
-        await client.copy_message(chat_id=backup_channel, from_chat_id=origin_channel, message_id=message.id)
-        total += 1
-        await asyncio.sleep(.5)
-    
+        try:
+            await client.copy_message(chat_id=backup_channel, from_chat_id=origin_channel, message_id=message.id)
+            total += 1
+            await asyncio.sleep(.5)
 
-    print(f"Total messages backup : {total}")
+            # Reset the counter and wait after 1500 messages
+            if total == 1500:
+                print("1500 messages limit reached, waiting for 16 minutes;"\
+                    f"at {datetime.now().strftime("%d/%m/%Y, %H:%M:%S")}")
+                await asyncio.sleep(960)  # because floodwait time is around 1000 seconds
+                total = 0
+
+        except FloodWait as e:
+            print(f"FloodWait: Waiting for : {e.value}; " \
+                f"at {datetime.now().strftime('%d/%m/%Y, %H:%M:%S')}")
+            await asyncio.sleep(float(e.value))
+
+            await client.copy_message(chat_id=backup_channel, from_chat_id=origin_channel, message_id=message.id)
+            await asyncio.sleep(.5)
 
 
 print("[Started] Backup bot - waiting for tasks :)")
 app.run()
-print()
