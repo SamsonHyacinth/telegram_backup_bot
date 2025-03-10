@@ -4,15 +4,14 @@ import os
 from datetime import datetime
 
 from dotenv import load_dotenv
-from pyrogram import filters
-from pyrogram.client import Client
-from pyrogram.types import Message, Chat
-from pyrogram.errors import FloodWait
+from telethon import events, TelegramClient as Client
+from telethon.tl.types import Message, MessageService
+from telethon.errors import FloodWaitError
 
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.ERROR)
+    level=logging.WARNING)
 
 load_dotenv(dotenv_path = ".token/token.env")
 
@@ -25,25 +24,45 @@ origin_channel = os.getenv("ORIGIN_CHANNEL")
 if not backup_channel or not origin_channel:
     raise ValueError("BACKUP_CHANNEL and ORIGIN_CHANNEL must be set in environment variables")
 
-app = Client(name="backupbot", api_id=api_id, api_hash=api_hash)
+if not api_hash or not api_id:
+    raise ValueError("API_HASH and API_ID must be set in environment variables")
+
+# Convert to integers if they are IDs
+try:
+    backup_channel = int(backup_channel)
+    origin_channel = int(origin_channel)
+
+except ValueError:
+    pass
+
+app = Client("backupbot", api_id=api_id, api_hash=api_hash)
 
 
-@app.on_message(filters.channel & filters.command("backup"))
-async def backup(client: Client, message: Message):
+@app.on(events.NewMessage(outgoing=True, pattern=r"/backup"))
+async def backup(events):
+    # Get the entities
+    backup_entity = await app.get_entity(backup_channel)
+    origin_entity = await app.get_entity(origin_channel)
+
+    if backup_channel == events.chat_id:
+        print(f"Backup command received, getting messages at {datetime.now().strftime('%d/%m/%Y, %H:%M:%S')}")
+        msg = app.iter_messages(entity=origin_entity, reverse=True)
+    else:
+        print("launched from a different chat that backup channel, ignoring")
+        return
     
     messages = []
-    msg = client.get_chat_history(chat_id=origin_channel)
     async for m in msg:
-        messages.append(m)
+        if not isinstance(m, MessageService):
+            messages.append(m)
 
-    await client.send_message(chat_id=message.chat.id, text=f"Starting backup... {len(messages)} messages to backup")
 
-    messages = reversed(messages)
+    await app.send_message(entity=backup_entity, message=f"Starting backup... {len(messages)} messages to backup")
 
     total = 0 # Counter to reset the limit of 1500 messages
     for message in messages:
         try:
-            await client.copy_message(chat_id=backup_channel, from_chat_id=origin_channel, message_id=message.id)
+            await app.send_message(entity=backup_entity, message=message)
             total += 1
             await asyncio.sleep(.5)
 
@@ -54,14 +73,15 @@ async def backup(client: Client, message: Message):
                 await asyncio.sleep(960)  # because floodwait time is around 1000 seconds
                 total = 0
 
-        except FloodWait as e:
-            print(f"FloodWait: Waiting for : {e.value}; " \
+        except FloodWaitError as e:
+            print(f"FloodWait: Waiting for : {e.seconds}; " \
                 f"at {datetime.now().strftime('%d/%m/%Y, %H:%M:%S')}")
-            await asyncio.sleep(float(e.value))
+            await asyncio.sleep(float(e.seconds))
 
-            await client.copy_message(chat_id=backup_channel, from_chat_id=origin_channel, message_id=message.id)
+            await app.send_message(entity=backup_entity, message=message)
             await asyncio.sleep(.5)
 
 
 print("[Started] Backup bot - waiting for tasks :)")
-app.run()
+app.start()
+app.run_until_disconnected()
