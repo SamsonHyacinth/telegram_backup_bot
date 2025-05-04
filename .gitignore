@@ -176,3 +176,4 @@ cython_debug/
 # python-dotenv
 .token/
 main_0.py
+backup_data.json
